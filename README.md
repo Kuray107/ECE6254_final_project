@@ -38,7 +38,8 @@
         ...
     }
     ```
-- There are 429/1375/424 positive/negative/untested speakers in Coswara dataset.
+- There are 417/1331/398 positive/negative/untested speakers in Coswara dataset.
+- There are 3734/11926/3574 positive/negative/untested speakers in Coswara dataset.
 - There are 588/7129/5400 positive/negative/untested speakers in Coughvid dataset. 
 
 ## Stage 1: 

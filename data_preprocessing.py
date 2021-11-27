@@ -1,11 +1,13 @@
-from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
 import argparse
-import datetime
 import json
-import copy
 import os
+
+from audio_utils import wav_to_feature
+
+
+
 
 def create_coswara_json(coswara_dir, coswara_metadata):
     
@@ -20,6 +22,9 @@ def create_coswara_json(coswara_dir, coswara_metadata):
     p_count = 0
     n_count = 0
     u_count = 0
+    pd_count = 0
+    nd_count = 0
+    ud_count = 0
     for idx, row in coswara_metadata.iterrows():
         # get patient info
         # Note that we only need sound, patient_id and their pcr_test results 
@@ -27,26 +32,31 @@ def create_coswara_json(coswara_dir, coswara_metadata):
 
         patient_info = {}
         patient_folder = os.path.join(coswara_dir, datestrings[row['id']], row['id'])
-        wav_paths = [patient_folder+f for f in os.listdir(patient_folder) if '.wav' in f]
-        if len(wav_paths) != 9:
+        wav_paths = [os.path.join(patient_folder, f) for f in os.listdir(patient_folder) if '.wav' in f and f[:2] != "._"]
+        patient_info['feature_paths'] = wav_to_feature(wav_paths, store=True)
+        num_of_paths = len(patient_info['feature_paths'])
+        if num_of_paths < 5:
             continue
-        patient_info['wav_paths'] = wav_paths
 
 
         status= row['covid_status']
         if status in {'positive_mild', 'positive_moderate', 'positive_asymp'}:
             patient_info['pcr_test_result'] = 'positive'
             p_count += 1
+            pd_count += num_of_paths
         elif status in {'healthy'}:
             patient_info['pcr_test_result'] = 'negative'
             n_count += 1
+            nd_count += num_of_paths
         else:
             patient_info['pcr_test_result'] = 'untested'
             u_count += 1
+            ud_count += num_of_paths
 
         coswara_json[row['id']] = patient_info
 
     print(p_count, n_count, u_count)
+    print(pd_count, nd_count, ud_count)
     return coswara_json
  
 def create_coughvid_json(coughvid_dir, coughvid_metadata, threshold=0.7):
@@ -58,12 +68,20 @@ def create_coughvid_json(coughvid_dir, coughvid_metadata, threshold=0.7):
         if ID not in coughvid_json:
             patient_info = {}
             patient_info['pcr_test_result'] = row['pcr_test_result_inferred']
-            patient_info['wav_paths'] = [os.path.join(coughvid_dir, row['cough_path'])]
-            coughvid_json[ID] = patient_info
+            feature_paths = wav_to_feature([os.path.join(coughvid_dir, row['cough_path'])])
+            if len(feature_paths) == 0:
+                continue
+            else:
+                patient_info['feature_paths'] = wav_to_feature([os.path.join(coughvid_dir, row['cough_path'])])
+                coughvid_json[ID] = patient_info
         else:
             print('warning: detect the same speaker: {}!'.format(ID))
             assert (coughvid_json[ID]['pcr_test_result'] == row['pcr_test_result'])
-            coughvid_josn[ID][wav_paths].append(os.path.join(coughvid_dir, row['cough_path']))
+            feature_paths = wav_to_feature([os.path.join(coughvid_dir, row['cough_path'])])
+            if len(feature_paths) == 0:
+                continue
+            else:
+                coughvid_josn[ID]['feature_paths'] += feature_paths
 
     print(len(coughvid_json))
     return coughvid_json

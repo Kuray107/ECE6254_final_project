@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 stage=0
-stop_stage=100
+stop_stage=0
 dataset="coswara" # coswara or coughvid
 decompress=false
 
@@ -11,9 +11,13 @@ split_type="random"
 semi_supervised=false
 
 
+echo ${stop_stage}
+echo ${decompress}
+
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
     echo "stage0: dataset preparation"
     if $decompress  && [ ${dataset} = "coswara" ]; then
+        echo "Decompress coswara dataset..."     
         data_root="datasets/Coswara-Data"
         for subdir in $(find $data_root -name "202*" -type d); do
             echo ${subdir}
