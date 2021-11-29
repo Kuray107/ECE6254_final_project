@@ -6,14 +6,14 @@
 num_of_frame = 200 # ~30 frames per second.
 
 ### Experiment parameters:
-random_seeds = [1234] #, 719, 1011] #, 129, 1205, 1207, 523, 812, 1231, 1111]
-positive_patient_num = 500
-negative_patient_num = 500
+random_seeds = [1234, 719, 1011, 129, 1205, 824, 5278, 812, 1231, 9487]
+positive_patient_num = 400
+negative_patient_num = 400
 
 ### Optimization hparams:
-positive_negative_loss_ratio = 1.5
+positive_negative_loss_ratio = 1
 num_workers = 4
-num_epochs = 15
+num_epochs = 40
 batch_size = 64
 learning_rate = 0.001
 learning_rate_min = 1e-4
@@ -24,7 +24,7 @@ prob_threshold = 0.5
 
 ### Model parameters
 model_type = "AttRNN"
-complexity = "standard"
+complexity = "large"
 # CNN 
 if model_type == "AttRNN":
     if complexity == "simple":
@@ -47,7 +47,7 @@ if model_type == "AttRNN":
         out_channels = [64, 64, 128, 256]
         kernel_size = [(3, 5), (3, 5), (3, 5), (3, 5)]
         padding_size = [(1, 2), (1, 2), (1, 2), (3, 5)]
-        pool_size = [(2, 4), (2, 4), (5, 2), (5, 2)]
+        pool_size = [(2, 4), (2, 2), (5, 2), (5, 2)]
 
     # RNN
     num_rnnlayers = 2

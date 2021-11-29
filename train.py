@@ -97,6 +97,8 @@ def train(args, seed):
                 loss_weight = (labels*(hparams.positive_negative_loss_ratio-1) + 1)
                 loss = torch.mean(loss_weight*loss)
                 loss.backward()
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), hparams.grad_clip_thresh)
                 optimizer.step()
 
             model.eval()
@@ -166,4 +168,5 @@ if __name__ == '__main__':
     recall_list = np.asarray(recall_list)
     auc_list = np.asarray(auc_list)
     print(F1_list.mean(), acc_list.mean(), precision_list.mean(), recall_list.mean(), auc_list.mean())
+    print(F1_list.std(), acc_list.std(), precision_list.std(), recall_list.std(), auc_list.std())
 
