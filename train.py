@@ -9,38 +9,47 @@ from torch.nn import BCELoss, CrossEntropyLoss
 from torch.utils.data import DataLoader
 
 import hparams
-from models import AttRNN
-from utils import SaveBest
+from models import AttRNN, AttCNN
+from utils import SaveBest, calculate_F1_score, get_auc_score
 from dataset import data_split, supervised_collate_fn
 
 
 def validate(model, valid_loader, criterion):
-    num_correct = 0
-    num_total = 0
+    all_predictions = []
+    all_labels = []
     avg_loss = 0.0
     for batch in valid_loader:
         features, labels = batch
         features = features.cuda()
         labels = labels.cuda()
         preds = model(features)
-        num_correct += sum(torch.eq(labels, torch.argmax(preds, dim=1)))
-        num_total += len(labels)
-        avg_loss += criterion(preds, labels).item()*len(labels)
+        avg_loss += torch.mean(criterion(preds, labels)).item()*len(labels)
 
-    return avg_loss/num_total, num_correct/num_total
+        all_labels.append(labels.detach().cpu())
+        all_predictions.append(preds.detach().cpu())
+
+    all_predictions = torch.cat(all_predictions)
+    all_labels = torch.cat(all_labels)
+    auc_score = get_auc_score(all_predictions, all_labels)
+    F1_score, precision, recall, acc = calculate_F1_score(torch.gt(all_predictions, hparams.prob_threshold), all_labels)
+
+    return avg_loss/len(all_labels), F1_score, acc, precision, recall, auc_score
         
 
-def train(args):
+def train(args, seed):
     json_file = open(os.path.join('datasets', args.dataset+'.json'), 'r')
     data_dict = json.load(json_file)
     train_set, valid_set, test_set = data_split(data_dict, 
             semi=args.semi,
             split_type=args.split_type,
             positive_patient_num=hparams.positive_patient_num,
-            negative_patient_num=hparams.negative_patient_num)
-  
-    model = AttRNN().cuda()
-    criterion = CrossEntropyLoss()
+            negative_patient_num=hparams.negative_patient_num,
+            seed=seed)
+    if hparams.model_type == "AttRNN":
+        model = AttRNN().cuda()
+    else:
+        model = AttCNN().cuda()
+    criterion = BCELoss(reduction='none')
     optimizer = torch.optim.Adam(model.parameters(), 
             lr=hparams.learning_rate,
             weight_decay=hparams.weight_decay)
@@ -53,6 +62,7 @@ def train(args):
     else:
         # supervsied learning algorithm
         collate_fn = supervised_collate_fn(num_of_frame=hparams.num_of_frame)
+        valid_collate_fn = supervised_collate_fn(num_of_frame=hparams.num_of_frame, add_noise=False)
 
         train_loader = DataLoader(train_set, 
                 num_workers=hparams.num_workers, shuffle=True,
@@ -62,59 +72,62 @@ def train(args):
         valid_loader = DataLoader(valid_set, 
                 num_workers=hparams.num_workers, shuffle=False,
                 batch_size=hparams.batch_size,
-                collate_fn=collate_fn)
+                collate_fn=valid_collate_fn)
 
         test_loader = DataLoader(test_set, 
                 num_workers=hparams.num_workers, shuffle=False,
                 batch_size=hparams.batch_size,
-                collate_fn=collate_fn)
+                collate_fn=valid_collate_fn)
 
-        global_steps = 0
         for epoch in range(hparams.num_epochs):
-            print("Epoch: {}".format(epoch))
-            for i, batch in enumerate(train_loader):
+            if epoch >= 10:
+                num = 0.9**(epoch - 9)
+                lr = max(hparams.learning_rate*num, hparams.learning_rate_min)
+                for g in optimizer.param_groups:
+                    g['lr'] = lr
+                print("Epoch: {}, lr: {:.4f}".format(epoch, lr))
+                
+            for batch in train_loader:
                 features, labels = batch
                 features = features.cuda()
                 labels = labels.cuda()
                 model.zero_grad()
                 preds = model(features)
                 loss = criterion(preds, labels)
-                reduced_loss = loss.item()
+                loss_weight = (labels*(hparams.positive_negative_loss_ratio-1) + 1)
+                loss = torch.mean(loss_weight*loss)
                 loss.backward()
-                grad_norm = torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), hparams.grad_clip_thresh)
-
                 optimizer.step()
-                print("global_step: {}. train_loss: {}".format(global_steps, reduced_loss))
-
-                global_steps += 1
 
             model.eval()
-            val_loss, val_acc = validate(model, valid_loader, criterion)
-            print("Epoch: {}. valid_loss: {}, valid_acc: {}".format(epoch, val_loss, val_acc))
+            train_loss, train_F1, train_acc, train_precision, train_recall, train_auc = validate(model, train_loader, criterion)
+            print("Epoch: {}. train_loss: {:.3f}, train_F1: {:.3f}, train_acc: {:.3f}, train_auc: {:.3f}".format(
+                epoch, train_loss, train_F1, train_acc, train_auc))
+            val_loss, val_F1, val_acc, val_precision, val_recall, val_auc = validate(model, valid_loader, criterion)
+            print("Epoch: {}. valid_loss: {:.3f}, valid_F1: {:.3f}, valid_acc: {:.3f}. valid_auc: {:.3f}".format(
+                epoch, val_loss, val_F1, val_acc, val_auc))
+            
 
-            if save_best_cp.apply(val_acc):
+            if save_best_cp.apply(val_F1): #
                 print("saving best model...")
                 model_fname = os.path.join('test', 'model_save_dir', "best_model.ckpt")
-                torch.save(model.state_dict(), model_fname)
-
-            elif epoch == (hparams.num_epochs-1):
-                print("saving last model...")
-                model_fname = os.path.join('test', 'model_save_dir', "last_model.ckpt")
                 torch.save(model.state_dict(), model_fname)
              
 
             model.train()
 
+        model.eval()
+        test_loss, test_F1, test_acc, test_precision, test_recall, test_auc = validate(model, test_loader, criterion)
+        print("Last Epoch,  test_loss: {:.3f}, test_F1: {:.3f}, test_acc: {:.3f}, test_auc: {:.3f}".format(
+            test_loss, test_F1, test_acc, test_auc))
 
         model.load_state_dict(torch.load('test/model_save_dir/best_model.ckpt'))
         model.eval()
-        test_loss, test_acc = validate(model, test_loader, criterion)
-        print("Best Epoch: {}. test_loss: {}, test_acc: {}".format(save_best_cp.best_epoch, test_loss, test_acc))
-        model.load_state_dict(torch.load('test/model_save_dir/last_model.ckpt'))
-        model.eval()
-        test_loss, test_acc = validate(model, test_loader, criterion)
-        print("Last Epoch: {}. test_loss: {}, test_acc: {}".format(save_best_cp.best_epoch, test_loss, test_acc))
+        test_loss, test_F1, test_acc, test_precision, test_recall, test_auc = validate(model, test_loader, criterion)
+        print("Best Epoch: {},  val_F1: {:.3f}, test_loss: {:.3f}, test_F1 {:.3f}, test_acc: {}, test_auc: {:.3f}".format(
+            save_best_cp.best_epoch, save_best_cp.best_val, test_loss, test_F1, test_acc, test_auc))
+
+        return test_F1, test_acc, test_precision, test_recall, test_auc
 
 
 
@@ -122,8 +135,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, default="coswara",
             choices=["coswara", "coughvid"]);
-    parser.add_argument("-m", "--model", type=str, default="att-rnn",
-            choices=["att-rnn", "VGGish"])
     parser.add_argument("-s", "--semi", type=bool, default=False)
     parser.add_argument("--split_type", type=str, default="random", 
             choices=["speaker", "7-1-1", "random"])
@@ -134,9 +145,25 @@ if __name__ == '__main__':
         print("Error: split_type of \"speaker\" or \"7-1-1\" are not supported for coughvid dataset")
         sys.exit()
 
-    else:
-        train(args)
+    F1_list = []
+    acc_list = []
+    precision_list = []
+    recall_list = []
+    auc_list = []
+
+    for seed in hparams.random_seeds:
+        test_F1, test_acc, test_precision, test_recall, test_auc = train(args, seed)
+        F1_list.append(test_F1)
+        acc_list.append(test_acc)
+        precision_list.append(test_precision)
+        recall_list.append(test_recall)
+        auc_list.append(test_auc)
 
 
-
+    F1_list = np.asarray(F1_list)
+    acc_list = np.asarray(acc_list)
+    precision_list = np.asarray(precision_list)
+    recall_list = np.asarray(recall_list)
+    auc_list = np.asarray(auc_list)
+    print(F1_list.mean(), acc_list.mean(), precision_list.mean(), recall_list.mean(), auc_list.mean())
 

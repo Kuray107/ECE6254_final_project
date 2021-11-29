@@ -72,7 +72,7 @@ def create_coughvid_json(coughvid_dir, coughvid_metadata, threshold=0.7):
             if len(feature_paths) == 0:
                 continue
             else:
-                patient_info['feature_paths'] = wav_to_feature([os.path.join(coughvid_dir, row['cough_path'])])
+                patient_info['feature_paths'] = feature_paths
                 coughvid_json[ID] = patient_info
         else:
             print('warning: detect the same speaker: {}!'.format(ID))
@@ -81,7 +81,7 @@ def create_coughvid_json(coughvid_dir, coughvid_metadata, threshold=0.7):
             if len(feature_paths) == 0:
                 continue
             else:
-                coughvid_josn[ID]['feature_paths'] += feature_paths
+                coughvid_json[ID]['feature_paths'] += feature_paths
 
     print(len(coughvid_json))
     return coughvid_json

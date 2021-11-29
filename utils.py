@@ -1,4 +1,4 @@
-
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 
 class SaveBest:
     """ Callback to get the best value and epoch
@@ -37,3 +37,17 @@ class SaveBest:
             decision = True
         self.current_epoch += 1
         return decision
+
+
+def calculate_F1_score(preds, labels):
+    tn, fp, fn, tp = confusion_matrix(labels, preds).ravel()
+    precision = tp / (tp+fp)
+    recall = tp / (tp+fn)
+    F1_score = f1_score(labels.cpu(), preds.cpu())
+    acc = (tp+tn) / (tp+tn+fp+fn)
+
+    return F1_score, precision, recall, acc
+
+def get_auc_score(preds, labels):
+    auc_score = roc_auc_score(labels, preds)
+    return auc_score

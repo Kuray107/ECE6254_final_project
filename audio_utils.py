@@ -6,7 +6,7 @@ n_mels=80
 n_fft=1024
 hop_length=512
 
-def wav_to_feature(wav_paths, store=False):
+def wav_to_feature(wav_paths, store=True):
     feature_list = []
     for wav_path in wav_paths:
         # 1. load wav and trim silence
@@ -36,7 +36,7 @@ def wav_to_feature(wav_paths, store=False):
         # 4. Either we return the feature list directly, 
         # or we store the feature and return the path list.
         if store:
-            feature_path = wav_path.replace('.wav', '.npy')
+            feature_path = wav_path.split(".")[0]+".npy"
             np.save(feature_path, feature)
             feature_list.append(feature_path)
         else:

@@ -1,17 +1,19 @@
 import random
+from sklearn.preprocessing import StandardScaler
 
 import torch
 import numpy as np
 from torch.utils.data import Dataset
 
 # seed to initializa the random engine
-seed = 1234
+#seed = 1234
 
 def data_split(data_dict, 
         semi=False, 
         split_type='random', 
         positive_patient_num=20, 
-        negative_patient_num=20
+        negative_patient_num=20,
+        seed=1234
     ):
 
     random.seed(seed)
@@ -124,8 +126,9 @@ def data_split(data_dict,
 
 
 class supervised_collate_fn():
-    def __init__(self, num_of_frame=150):
-        self.num_of_frame=num_of_frame
+    def __init__(self, num_of_frame=150, add_noise=True):
+        self.num_of_frame = num_of_frame
+        self.add_noise = add_noise
 
     def __call__(self, batch):
         features = []
@@ -147,7 +150,10 @@ class supervised_collate_fn():
             labels.append(label)
 
         features = torch.from_numpy(np.concatenate(features, axis=0))
-        labels = torch.LongTensor(labels)
+        if self.add_noise:
+            noise = torch.randn(features.size())/10
+            features = features + noise
+        labels = torch.FloatTensor(labels)
 
         return features, labels
 
@@ -155,13 +161,22 @@ class supervised_dataset(Dataset):
     def __init__(self, datalist):
         self.features = []
         self.labels = []
+        self.scaler = StandardScaler()
         for path, label in datalist:
             feature = np.load(path)
             self.features.append(np.load(path))
             self.labels.append(label)
 
+        all_features = np.concatenate(self.features, axis=1)
+        self.mean = all_features.mean(axis=1, keepdims=True)
+        self.std = all_features.std(axis=1, keepdims=True)
+        #print(self.mean, self.std)
+
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx]
+        D, T = self.features[idx].shape
+        mean = np.repeat(self.mean, T, axis=1)
+        std = np.repeat(self.std, T, axis=1)
+        return (self.features[idx]-mean)/std, self.labels[idx]
 
     def __len__(self):
         return (len(self.features))
