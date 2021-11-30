@@ -24,15 +24,15 @@ prob_threshold = 0.5
 
 ### Model parameters
 model_type = "AttRNN"
-complexity = "large"
+complexity = "simple"
 # CNN 
 if model_type == "AttRNN":
     if complexity == "simple":
         num_convlayers = 2
         in_channels = [1, 64]
         out_channels = [64, 64]
-        kernel_size = [(3, 5), (3, 5)]
-        padding_size = [(1, 2), (1, 2)]
+        kernel_size = [(5, 5), (5, 5)]
+        padding_size = [(2, 2), (2, 2)]
         pool_size = [(5, 5), (5, 5)]
     elif complexity == "standard":
         num_convlayers = 3
@@ -75,7 +75,7 @@ elif model_type == "AttCNN":
         padding_size = [(1, 2), (1, 2), (1, 2), (3, 5)]
         pool_size = [(2, 4), (2, 4), (5, 2), (5, 2)]
 
-cnn_dropout = 0.2
+cnn_dropout = 0.0
 
 # Attention
 att_dropout = 0.0

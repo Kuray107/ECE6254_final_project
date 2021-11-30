@@ -95,7 +95,7 @@ def train(args, seed):
                 preds = model(features)
                 loss = criterion(preds, labels)
                 loss_weight = (labels*(hparams.positive_negative_loss_ratio-1) + 1)
-                loss = torch.mean(loss_weight*loss)
+                loss = torch.mean(loss*loss_weight)
                 loss.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     model.parameters(), hparams.grad_clip_thresh)

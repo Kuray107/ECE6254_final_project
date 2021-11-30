@@ -63,7 +63,7 @@ class AttCNN(nn.Module):
         attscores = self.softmax(attscores).unsqueeze(1) # attscores.shape = B, 1, T
         weighted_sum_vector = torch.bmm(attscores, x).squeeze()
         preds = self.decision(weighted_sum_vector)
-        preds = self.sigmoid(preds).squeeze() # B 
+        preds = self.sigmoid(preds).squeeze(1) # B 
 
         return preds
 
@@ -103,9 +103,9 @@ class AttRNN(nn.Module):
         query = self.att_dropout(query) 
         attscores = torch.bmm(x, query).permute(0, 2, 1) # B, 1, T
         attscores = self.softmax(attscores)
-        weighted_sum_vector = torch.bmm(attscores, x).squeeze()
+        weighted_sum_vector = torch.bmm(attscores, x).squeeze(1)
         preds = self.decision(weighted_sum_vector)
-        preds = self.sigmoid(preds).squeeze() # B 
+        preds = self.sigmoid(preds).squeeze(1) # B 
 
         return preds
 

@@ -59,7 +59,7 @@ def data_split(data_dict,
             info = data_dict[patient]
             for feature_path in info["feature_paths"]:
                 if i < negative_index1:
-                    train_list.append([feature_path, 0]) # the label for negative is 1
+                    train_list.append([feature_path, 0]) # the label for negative is 0
                 elif i >= negative_index1 and i < negative_index2:
                     valid_list.append([feature_path, 0])
                 else:
@@ -124,6 +124,134 @@ def data_split(data_dict,
 
     return train_set, valid_set, test_set
 
+    
+def data_split2(data_dict, 
+        semi=False, 
+        split_type='random', 
+        positive_patient_num=20, 
+        negative_patient_num=20,
+        seed=1234
+    ):
+
+    random.seed(seed)
+
+    type_lists = {"positive": [], "negative": [], "untested": []}
+    for patient, info in data_dict.items():
+        result = info["pcr_test_result"]
+        type_lists[result].append(patient)
+    random.shuffle(type_lists["positive"])
+    random.shuffle(type_lists["negative"])
+    random.shuffle(type_lists["untested"])
+
+    if positive_patient_num < 0 or positive_patient_num > len(type_lists["positive"]):
+        positive_patient_num = len(type_lists["positive"])
+    if negative_patient_num < 0 or negative_patient_num > len(type_lists["negative"]):
+        negative_patient_num = len(type_lists["negative"])
+
+    # resize positive and negative datasets according to the specified number
+    type_lists["positive"] = type_lists["positive"][:positive_patient_num]
+    type_lists["negative"] = type_lists["negative"][:negative_patient_num]
+          
+    seen_speaker_train_list = []
+    unseen_speaker_train_list = []
+    test_list = []
+
+
+    ## First we selected a half of speakers. Each of the speakers will contribute 
+    ## exactly one testing data. The remaining data will be our seen-speaker training data
+    for i, patient in enumerate(type_lists["positive"][:(positive_patient_num//2)]):
+        info = data_dict[patient]
+        random.shuffle(info['feature_paths'])
+        for i, feature_path in enumerate(info["feature_paths"]):
+            if i == 0:
+                test_list.append([feature_path, 1])
+            else:
+                seen_speaker_train_list.append([feature_path, 1])
+
+    for i, patient in enumerate(type_lists["negative"][:(negative_patient_num//2)]):
+        info = data_dict[patient]
+        random.shuffle(info['feature_paths'])
+        for i, feature_path in enumerate(info["feature_paths"]):
+            if i == 0:
+                test_list.append([feature_path, 0])
+            else:
+                seen_speaker_train_list.append([feature_path, 0])
+
+
+    # Gather training data from unseen speakers 
+    for i, patient in enumerate(type_lists["positive"][(positive_patient_num//2):]):
+        info = data_dict[patient]
+        for feature_path in info["feature_paths"]:
+            unseen_speaker_train_list.append([feature_path, 1]) # the label for positive is 1
+
+    for i, patient in enumerate(type_lists["negative"][(negative_patient_num//2):]):
+        info = data_dict[patient]
+        for feature_path in info["feature_paths"]:
+            unseen_speaker_train_list.append([feature_path, 0]) # the label for negative is 0
+
+
+    # Make sure all three type of data spliting method 
+    # will produce exactly the same number of training data
+
+    num_of_valid_data = len(seen_speaker_train_list)//8
+    num_of_train_data = len(seen_speaker_train_list) - num_of_valid_data
+
+    if split_type == "speaker":
+        random.shuffle(unseen_speaker_train_list)
+        valid_list = unseen_speaker_train_list[:num_of_valid_data]
+        train_list = unseen_speaker_train_list[num_of_valid_data:num_of_valid_data+num_of_train_data]
+
+    elif split_type == "7-1-1":
+        random.shuffle(seen_speaker_train_list)
+        valid_list = seen_speaker_train_list[:num_of_valid_data]
+        train_list = seen_speaker_train_list[num_of_valid_data:]
+
+
+    elif split_type == "random":
+        combine_list = seen_speaker_train_list + unseen_speaker_train_list
+        random.shuffle(combine_list)
+        valid_list = combine_list[:num_of_valid_data]
+        train_list = combine_list[num_of_valid_data:num_of_valid_data+num_of_train_data]
+
+
+    if semi:
+        unlabeled_list = []
+        for patient in type_lists["untested"]:
+            info = data_dict[patient]
+            for feature_path in info["feature_paths"]:
+                unlabeled_list.append([feature_path, -1])
+        train_set = supervised_dataset(train_list)
+    else:
+        train_set = supervised_dataset(train_list)
+    valid_set = supervised_dataset(valid_list)
+    test_set = supervised_dataset(test_list)
+
+    return train_set, valid_set, test_set
+
+
+class supervised_dataset(Dataset):
+    def __init__(self, datalist):
+        self.features = []
+        self.labels = []
+        self.scaler = StandardScaler()
+        for path, label in datalist:
+            feature = np.load(path)
+            self.features.append(np.load(path))
+            self.labels.append(label)
+
+        all_features = np.concatenate(self.features, axis=1)
+        self.mean = all_features.mean(axis=1, keepdims=True)
+        self.std = all_features.std(axis=1, keepdims=True)
+        #print(self.mean, self.std)
+
+    def __getitem__(self, idx):
+        D, T = self.features[idx].shape
+        mean = np.repeat(self.mean, T, axis=1)
+        std = np.repeat(self.std, T, axis=1)
+        return (self.features[idx]-mean)/std, self.labels[idx]
+
+    def __len__(self):
+        return (len(self.features))
 
 class supervised_collate_fn():
     def __init__(self, num_of_frame=150, add_noise=True):
@@ -157,32 +285,6 @@ class supervised_collate_fn():
 
         return features, labels
 
-class supervised_dataset(Dataset):
-    def __init__(self, datalist):
-        self.features = []
-        self.labels = []
-        self.scaler = StandardScaler()
-        for path, label in datalist:
-            feature = np.load(path)
-            self.features.append(np.load(path))
-            self.labels.append(label)
-
-        all_features = np.concatenate(self.features, axis=1)
-        self.mean = all_features.mean(axis=1, keepdims=True)
-        self.std = all_features.std(axis=1, keepdims=True)
-        #print(self.mean, self.std)
-
-    def __getitem__(self, idx):
-        D, T = self.features[idx].shape
-        mean = np.repeat(self.mean, T, axis=1)
-        std = np.repeat(self.std, T, axis=1)
-        return (self.features[idx]-mean)/std, self.labels[idx]
-
-    def __len__(self):
-        return (len(self.features))
-
-
-
 #class semi_supervised_dataset(Dataset):
 #    def __init__(self, labeled_datalist, unlabeled_datalist):
 #
@@ -191,6 +293,3 @@ class supervised_dataset(Dataset):
 #
 #
 #    def __len__(self):
-        
-
-    
