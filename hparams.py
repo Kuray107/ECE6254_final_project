@@ -6,9 +6,10 @@
 num_of_frame = 200 # ~30 frames per second.
 
 ### Experiment parameters:
+kfold_n_splits = 8
 random_seeds = [1234, 719, 1011, 129, 1205, 824, 5278, 812, 1231, 9487]
-positive_patient_num = 400
-negative_patient_num = 400
+positive_patient_num = 200
+negative_patient_num = 200
 
 ### Optimization hparams:
 positive_negative_loss_ratio = 1
@@ -75,7 +76,7 @@ elif model_type == "AttCNN":
         padding_size = [(1, 2), (1, 2), (1, 2), (3, 5)]
         pool_size = [(2, 4), (2, 4), (5, 2), (5, 2)]
 
-cnn_dropout = 0.0
+cnn_dropout = 0.15
 
 # Attention
 att_dropout = 0.0

@@ -7,11 +7,12 @@ import numpy as np
 
 from torch.nn import BCELoss, CrossEntropyLoss
 from torch.utils.data import DataLoader
+from sklearn.model_selection import KFold
 
 import hparams
 from models import AttRNN, AttCNN
-from utils import SaveBest, calculate_F1_score, get_auc_score
-from dataset import data_split, supervised_collate_fn
+from utils import SaveBest, calculate_F1_score, get_auc_score, delete_outlier
+from dataset import data_split, supervised_train_dataset, supervised_valid_dataset, supervised_collate_fn
 
 
 def validate(model, valid_loader, criterion):
@@ -36,24 +37,38 @@ def validate(model, valid_loader, criterion):
     return avg_loss/len(all_labels), F1_score, acc, precision, recall, auc_score
         
 
-def train(args, seed):
+def train(args, random_seed):
     json_file = open(os.path.join('datasets', args.dataset+'.json'), 'r')
     data_dict = json.load(json_file)
-    train_set, valid_set, test_set = data_split(data_dict, 
-            semi=args.semi,
-            split_type=args.split_type,
-            positive_patient_num=hparams.positive_patient_num,
-            negative_patient_num=hparams.negative_patient_num,
-            seed=seed)
+    if not args.semi:
+        train_list, valid_list, test_list = data_split(data_dict, 
+                semi=False,
+                split_type=args.split_type,
+                positive_patient_num=hparams.positive_patient_num,
+                negative_patient_num=hparams.negative_patient_num,
+                seed=random_seed)
+    else:
+        train_list, valid_list, test_list, unlabeled_list = data_split(data_dict, 
+                semi=True,
+                split_type=args.split_type,
+                positive_patient_num=hparams.positive_patient_num,
+                negative_patient_num=hparams.negative_patient_num,
+                seed=random_seed)
+
+    print(len(train_list), len(valid_list), len(test_list))
+    # Model stucture
     if hparams.model_type == "AttRNN":
         model = AttRNN().cuda()
     else:
         model = AttCNN().cuda()
+
+    # Loss function and optimizer
     criterion = BCELoss(reduction='none')
     optimizer = torch.optim.Adam(model.parameters(), 
             lr=hparams.learning_rate,
             weight_decay=hparams.weight_decay)
     
+    # Early stopping 
     save_best_cp = SaveBest("sup")
 
     if args.semi:
@@ -63,6 +78,10 @@ def train(args, seed):
         # supervsied learning algorithm
         collate_fn = supervised_collate_fn(num_of_frame=hparams.num_of_frame)
         valid_collate_fn = supervised_collate_fn(num_of_frame=hparams.num_of_frame, add_noise=False)
+
+        train_set = supervised_train_dataset(train_list)
+        valid_set = supervised_valid_dataset(valid_list, num_of_frame=hparams.num_of_frame, seed=random_seed)
+        test_set = supervised_valid_dataset(test_list, num_of_frame=hparams.num_of_frame, seed=random_seed)
 
         train_loader = DataLoader(train_set, 
                 num_workers=hparams.num_workers, shuffle=True,
@@ -104,26 +123,27 @@ def train(args, seed):
             model.eval()
             train_loss, train_F1, train_acc, train_precision, train_recall, train_auc = validate(model, train_loader, criterion)
             print("Epoch: {}. train_loss: {:.3f}, train_F1: {:.3f}, train_acc: {:.3f}, train_auc: {:.3f}".format(
-                epoch, train_loss, train_F1, train_acc, train_auc))
+                    epoch, train_loss, train_F1, train_acc, train_auc))
             val_loss, val_F1, val_acc, val_precision, val_recall, val_auc = validate(model, valid_loader, criterion)
             print("Epoch: {}. valid_loss: {:.3f}, valid_F1: {:.3f}, valid_acc: {:.3f}. valid_auc: {:.3f}".format(
-                epoch, val_loss, val_F1, val_acc, val_auc))
+                    epoch, val_loss, val_F1, val_acc, val_auc))
             
 
             if save_best_cp.apply(val_F1): #
                 print("saving best model...")
-                model_fname = os.path.join('test', 'model_save_dir', "best_model.ckpt")
+                model_fname = os.path.join('results', args.split_type,  "best_model.ckpt")
                 torch.save(model.state_dict(), model_fname)
              
-
             model.train()
 
+
+        ### Finishing training. Do testing.
         model.eval()
         test_loss, test_F1, test_acc, test_precision, test_recall, test_auc = validate(model, test_loader, criterion)
         print("Last Epoch,  test_loss: {:.3f}, test_F1: {:.3f}, test_acc: {:.3f}, test_auc: {:.3f}".format(
             test_loss, test_F1, test_acc, test_auc))
 
-        model.load_state_dict(torch.load('test/model_save_dir/best_model.ckpt'))
+        model.load_state_dict(torch.load(os.path.join('results', args.split_type, 'best_model.ckpt')))
         model.eval()
         test_loss, test_F1, test_acc, test_precision, test_recall, test_auc = validate(model, test_loader, criterion)
         print("Best Epoch: {},  val_F1: {:.3f}, test_loss: {:.3f}, test_F1 {:.3f}, test_acc: {}, test_auc: {:.3f}".format(
@@ -163,10 +183,12 @@ if __name__ == '__main__':
 
 
     F1_list = np.asarray(F1_list)
-    acc_list = np.asarray(acc_list)
+    acc_list =  np.asarray(acc_list)
     precision_list = np.asarray(precision_list)
     recall_list = np.asarray(recall_list)
     auc_list = np.asarray(auc_list)
+    ### Delete outlier:
+    
     print(F1_list.mean(), acc_list.mean(), precision_list.mean(), recall_list.mean(), auc_list.mean())
     print(F1_list.std(), acc_list.std(), precision_list.std(), recall_list.std(), auc_list.std())
 

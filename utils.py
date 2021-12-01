@@ -1,3 +1,4 @@
+import numpy as np
 from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 
 class SaveBest:
@@ -51,3 +52,11 @@ def calculate_F1_score(preds, labels):
 def get_auc_score(preds, labels):
     auc_score = roc_auc_score(labels, preds)
     return auc_score
+
+def delete_outlier(np_list):
+    if len(np_list) < 3:
+        return np_list
+    else:
+        np_list = np.delete(np_list, np_list.argmin())
+        np_list = np.delete(np_list, np_list.argmax())
+        return np_list
