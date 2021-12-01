@@ -44,7 +44,9 @@
 
 ## Model training:
 - To train the model, use the following command:
-    ```sh
+    ```
+    mkdir results
+    mkdir results/<split_type> # folder to store model checkpoint
     python train.py --dataset <dataset> --semi <bool> --split_type <split_type>
     ```
 - Note that we can only choose "default" as the split_type when training on Coughvid dataset.
