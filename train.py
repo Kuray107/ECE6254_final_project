@@ -5,9 +5,8 @@ import torch
 import argparse
 import numpy as np
 
-from torch.nn import BCELoss, CrossEntropyLoss
+from torch.nn import BCELoss
 from torch.utils.data import DataLoader
-from sklearn.model_selection import KFold
 
 import hparams
 from models import AttRNN, AttCNN
@@ -158,13 +157,13 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dataset", type=str, default="coswara",
             choices=["coswara", "coughvid"]);
     parser.add_argument("-s", "--semi", type=bool, default=False)
-    parser.add_argument("--split_type", type=str, default="random", 
-            choices=["speaker", "7-1-1", "random"])
+    parser.add_argument("--split_type", type=str, default="default", 
+            choices=["speaker", "7-1-1", "random", "default"])
     
     args = parser.parse_args()
     # split_type of "speaker" or "7-1-1" are not supported for coughvid dataset
-    if args.dataset == "coughvid" and args.split_type != "random":
-        print("Error: split_type of \"speaker\" or \"7-1-1\" are not supported for coughvid dataset")
+    if args.dataset == "coughvid" and args.split_type != "default":
+        print("Error: Only the \"default\" split_type is supported for coughvid dataset")
         sys.exit()
 
     F1_list = []

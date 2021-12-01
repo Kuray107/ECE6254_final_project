@@ -47,8 +47,6 @@
     ```sh
     python train.py --dataset <dataset> --semi <bool> --split_type <split_type>
     ```
-- Note that we can only choose "random" as the split_type when training on Coughvid dataset.
-
-
+- Note that we can only choose "default" as the split_type when training on Coughvid dataset.
 
 

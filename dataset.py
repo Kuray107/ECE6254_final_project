@@ -1,5 +1,4 @@
 import random
-from sklearn.preprocessing import StandardScaler
 
 import torch
 import numpy as np
@@ -37,34 +36,52 @@ def data_split(data_dict,
 
 
 
-    ### This part is for coughvid dataset only.
-    if split_type == "coughvid":
-        total_list = []
-        for i, patient in enumerate(type_list["posotive"]):
+    ### Normally the dataset should be devided by speaker. 
+    ### In Coughvid each speaker has only one audio file. 
+    ### In Coswara, almost all speakers have 9 audio files.
+    if split_type == "default":
+        train_list = []
+        valid_list = []
+        test_list = []
+
+        positive_index1, positive_index2 = (positive_patient_num//9)*7, (positive_patient_num//9)*8
+        for i, patient in enumerate(type_lists["posotive"]):
             info = data_dict[patient]
             for feature_path in info["feature_paths"]:
-                total_list.append([feature_path, 1])
+                if i < positive_index1:
+                    train_list.append([feature_path, 1]) # the label for positive is 1
+                elif i >= positive_index1 and i < positive_index2:
+                    valid_list.append([feature_path, 1])
+                else:
+                    test_list.append([feature_path, 1])
 
-        for i, patient in enumerate(type_list["negative"]):
+        negative_index1, negative_index2 = (negative_patient_num//9)*7, (negative_patient_num//9)*8
+        for i, patient in enumerate(type_lists["negative"]):
             info = data_dict[patient]
             for feature_path in info["feature_paths"]:
-                total_list.append([feature_path, 0])
-
-        split_index1, split_index2 =  len(total_list)//9*7, len(total_list)//9*8
-        train_list = total_list[:split_index1]
-        valid_list = total_list[split_index1:split_index2]
-        test_list = total_list[split_index2:]
+                if i < negative_index1:
+                    train_list.append([feature_path, 0]) # the label for negative is 0
+                elif i >= negative_index1 and i < negative_index2:
+                    valid_list.append([feature_path, 0])
+                else:
+                    test_list.append([feature_path, 0])
 
         if semi:
             unlabeled_list = []
             for patient in type_lists["untested"]:
                 info = data_dict[patient]
                 for feature_path in info["feature_paths"]:
-                    unlabeled_list.append([feature_path, -1])
+                    unlabeled_list.append([feature_path, -1]) # the sudo-label for untested is -1. 
 
             return train_list, valid_list, test_list, unlabeled_list
+        else:
+            return train_list, valid_list, test_list
 
     ### The following part is for coswara dataset only.
+    ### This part is designed only for speaker bias experiment
+    ### (To fix the testing data when using 3 different spliting scenario).
+    ### Ignore the following code if you just want to train and test models
+    ### in a normal setting.
           
     seen_speaker_train_list = []
     unseen_speaker_train_list = []
@@ -127,17 +144,7 @@ def data_split(data_dict,
     valid_list = train_list[:valid_split_index]
     train_list = train_list[valid_split_index:]
 
-    if semi:
-        unlabeled_list = []
-        for patient in type_lists["untested"]:
-            info = data_dict[patient]
-            for feature_path in info["feature_paths"]:
-                unlabeled_list.append([feature_path, -1])
-
-        return train_list, valid_list, test_list, unlabeled_list
-    else:
-
-        return train_list, valid_list, test_list
+    return train_list, valid_list, test_list
 
 
 
