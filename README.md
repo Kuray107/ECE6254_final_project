@@ -1,13 +1,15 @@
 ## Data preprocessing
-### Data Download and decompress
+### Data Download, Decompress and Convert
 - First we need to download Coswara and coughbid datasets.
     ```sh
     mkdir datasets
     cd datasets
     git clone https://github.com/iiscleap/Coswara-Data.git # Coswara
-    ./decompress.sh # Decompress the dataset. Only Coswara needs it. 
+    ./decompress.sh # Decompress the dataset. Only Coswara needs this step. 
     git clone https://github.com/virufy/virufy-cdf-coughvid.git # coughvid from virufy
+    ./convert.sh # Convert files in coughvid dataset into .wav foramt. Only Coughvid needs this step
     ```
+- After converting files into .wav format, please also change all ".webm" and ".ogg" strings of "datasets/virufy-cdf-coughvid/virufy-cdf-coughvid.csv" into ".wav"
 ### Data preparation
 - After finishing data download, we will need to do data preparation. 
     ```sh

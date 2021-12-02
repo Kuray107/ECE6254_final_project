@@ -45,7 +45,7 @@ def data_split(data_dict,
         test_list = []
 
         positive_index1, positive_index2 = (positive_patient_num//9)*7, (positive_patient_num//9)*8
-        for i, patient in enumerate(type_lists["posotive"]):
+        for i, patient in enumerate(type_lists["positive"]):
             info = data_dict[patient]
             for feature_path in info["feature_paths"]:
                 if i < positive_index1:

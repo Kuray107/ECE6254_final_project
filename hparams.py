@@ -8,8 +8,8 @@ num_of_frame = 200 # ~30 frames per second.
 ### Experiment parameters:
 kfold_n_splits = 8
 random_seeds = [1234, 719, 1011, 129, 1205, 824, 5278, 812, 1231, 9487]
-positive_patient_num = 40
-negative_patient_num = 40
+positive_patient_num = 400
+negative_patient_num = 400
 
 ### Optimization hparams:
 positive_negative_loss_ratio = 1
